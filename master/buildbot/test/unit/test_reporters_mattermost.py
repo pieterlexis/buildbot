@@ -71,4 +71,16 @@ class TestMattermostStatusPush(unittest.TestCase, ReporterTestMixin, LoggingMixi
         build['complete'] = True
         self.mm.buildFinished(('build', 20, 'finished'), build)
 
-
+    @defer.inlineCallbacks
+    def test_build_started_defaults(self):
+        yield self.createReporter()
+        build = yield self.setupBuildResults()
+        build['state_string'] = 'starting'
+        self._http.expect(
+            'post',
+            '',
+            json={'username': 'BuildBot',
+                  'text': 'Started build Builder0 (http://localhost:8080/#builders/79/builds/0)',
+                  'icon_url': '//buildbot.net/img/nut.png',
+                  'username': 'BuildBot'})
+        self.mm.buildStarted(('build', 20, 'new'), build)

@@ -62,17 +62,23 @@ class MattermostStatusPush(http.HttpStatusPushBase):
 
         return self._http.post('', json=payload)
 
+    def getMessage(self, build):
+        if build['complete']:
+            return 'Finished build {} with result {} ({})'.format(
+                build['builder']['name'], statusToString(build['results']), build['url'])
+        if build['state_string'] == 'starting':
+            return 'Started build {} ({})'.format(
+                build['builder']['name'], build['url'])
+        return None
+
     @defer.inlineCallbacks
     def send(self, build):
-        channels = yield self.getChannelForBuild(build['builder']['name'])
+        message = yield self.getMessage(build)
 
-        yield utils.getDetailsForBuild(self.master, build, **self.neededDetails)
-
-        if not build['complete']:
+        if not message:
             return
 
-        message = 'Finished build {} with result {} ({})'.format(
-            build['builder']['name'], statusToString(build['results']), build['url'])
+        channels = yield self.getChannelForBuild(build['builder']['name'])
 
         if not channels:
             res = yield self.sendMessageToChannel('DEFAULT', message)
