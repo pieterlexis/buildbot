@@ -15,14 +15,20 @@
 
 from __future__ import absolute_import
 from __future__ import print_function
+from future.utils import string_types
 
 from twisted.internet import defer
 
+from buildbot import config
 from buildbot.reporters import http
 from buildbot.util import httpclientservice
 from buildbot.util.logger import Logger
 from buildbot.reporters import utils
 from buildbot.process.results import statusToString
+from buildbot.process.results import EXCEPTION
+from buildbot.process.results import FAILURE
+from buildbot.process.results import SUCCESS
+from buildbot.process.results import WARNINGS
 
 log = Logger()
 
@@ -32,7 +38,7 @@ class MattermostStatusPush(http.HttpStatusPushBase):
     neededDetails = dict(wantProperties=True)
 
     @defer.inlineCallbacks
-    def reconfigService(self, endpoint, builder_channel_map={},
+    def reconfigService(self, endpoint, builder_configs={},
                         icon_url='//buildbot.net/img/nut.png',
                         bot_name='BuildBot', **kwargs):
         yield http.HttpStatusPushBase.reconfigService(self, **kwargs)
@@ -40,15 +46,21 @@ class MattermostStatusPush(http.HttpStatusPushBase):
         self._http = yield httpclientservice.HTTPClientService.getService(
             self.master, endpoint)
 
+        self.builder_configs = builder_configs
         self.icon_url = icon_url
         self.bot_name = bot_name
-        self.builder_channel_map = builder_channel_map
 
-    def getChannelForBuild(self, key):
-        res = self.builder_channel_map.get(key, [])
-        if not isinstance(res, list):
-            return [res]
-        return res
+    def checkConfig(self, endpoint, builder_configs={},
+                    icon_url='//buildbot.net/img/nut.png',
+                    bot_name='BuildBot', **kwargs):
+        if not isinstance(endpoint, string_types):
+            config.error('endpoint must be a string')
+        if not isinstance(builder_configs, dict):
+            config.error('builder_configs must be a dictionary')
+        if not isinstance(icon_url, string_types):
+            config.error('icon_url must be a string')
+        if not isinstance(bot_name, string_types):
+            config.error('bot_name must be a string')
 
     def sendMessageToChannel(self, channel, message):
         payload = {
@@ -62,31 +74,49 @@ class MattermostStatusPush(http.HttpStatusPushBase):
 
         return self._http.post('', json=payload)
 
-    def getMessage(self, build):
+    def getMessage(self, builder_config, build):
+        msg_header = 'Builder {}'.format(build['builder']['name'])
+        msg_buildurl = '[#{buildnum}]({buildurl})'.format(
+            buildnum=build['number'],
+            buildurl=build['url']
+        )
+
+        if build['properties'].get('project', [''])[0]:
+            msg_header += ' for project {}'.format(build['properties']['project'])
+
         if build['complete']:
-            return 'Finished build {} with result {} ({})'.format(
-                build['builder']['name'], statusToString(build['results']), build['url'])
-        if build['state_string'] == 'starting':
-            return 'Started build {} ({})'.format(
-                build['builder']['name'], build['url'])
-        return None
+            msg_header += ' finished {} {}!'.format(
+                msg_buildurl,
+                {
+                    SUCCESS: 'successfully',
+                    EXCEPTION: 'with an error',
+                    FAILURE: 'unsuccessfully',
+                    WARNINGS: 'successfully with warnings'
+                }.get(build['results'])
+            )
+        else:
+            msg_header += ' started {}!'.format(msg_buildurl)
+
+        return """{msg_header}""".format(msg_header=msg_header)
+
+    def getBuilderConfig(self, key):
+        if len(self.builder_configs) == 0:
+            return {}
+
+        return self.builder_configs.get(key, None)
 
     @defer.inlineCallbacks
     def send(self, build):
-        message = yield self.getMessage(build)
-
-        if not message:
+        builder_name = build['builder']['name']
+        builder_config = yield self.getBuilderConfig(builder_name)
+        if builder_config is None:
             return
+        message = yield self.getMessage(builder_config, build)
 
-        channels = yield self.getChannelForBuild(build['builder']['name'])
+        channels = builder_config.get('channels', ['DEFAULT'])
+        if not isinstance(channels, list):
+            channels = [channels]
 
-        if not channels:
-            res = yield self.sendMessageToChannel('DEFAULT', message)
-            if res.code != 200:
-                content = yield res.content()
-                log.error("{code}: Unable to push status: {content}".format(
-                    code=res.code, content=content))
-            return
         for channel in channels:
             res = yield self.sendMessageToChannel(channel, message)
             if res.code != 200:

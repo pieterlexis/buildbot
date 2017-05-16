@@ -1209,7 +1209,7 @@ MattermostStatusPush
     from buildbot.plugins import reporters
 
     mm = reporters.MattermostStatusPush('https://mattermost.example.com/hooks/xxxx-secret-string',
-                                        {'builder1': ['channel1', 'channel2'], 'builder2': 'channel3'})
+                                        {'builder1': {'channels': ['channel1', 'channel2']}, 'builder2': {}})
     c['services'].append(mm)
 
 
@@ -1218,13 +1218,13 @@ MattermostStatusPush
 it requires the `txrequests`_ package to allow the interaction with the API.
 
 .. py:class:: MattermostStatusPush(endpoint,
-    builder_channel_map={},
+    builder_configs={},
     icon_url='//buildbot.net/img/nut.png',
     bot_name='BuildBot',
     **kwargs)
 
     :param string endpoint: The URL to the webhook, this includes the 'secret' key.
-    :param dictionary builder_channel_map: (optional) If specified, will send messages for a builder (based on the name) to the corresponding channel or list of channels. If empty, messages for all builders will be sent to the default channel for the webhook.
+    :param dictionary builder_configs: On an empty dictionary, send messages for all builders to the default channel of the Mattermost webhook. When not empty, each key must be a name of a builder and it's value a dictionary. This inner dictionary supports a "channels"-key, which must be a string or list of strings of channels to send the message to.
     :param string icon_url: A url to a picture to display as the bot's avatar.
     :param string bot_name: The name the bot give itself.
 
