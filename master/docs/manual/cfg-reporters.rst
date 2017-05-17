@@ -1219,12 +1219,14 @@ it requires the `txrequests`_ package to allow the interaction with the API.
 
 .. py:class:: MattermostStatusPush(endpoint,
     builder_configs={},
+    ignore_builders=[],
     icon_url='//buildbot.net/img/nut.png',
     bot_name='BuildBot',
     **kwargs)
 
     :param string endpoint: The URL to the webhook, this includes the 'secret' key.
-    :param dictionary builder_configs: On an empty dictionary, send messages for all builders to the default channel of the Mattermost webhook. When not empty, each key must be a name of a builder and it's value a dictionary. This inner dictionary supports a "channels"-key, which must be a string or list of strings of channels to send the message to.
+    :param dictionary builder_configs: On an empty dictionary, send messages for all builders to the default channel of the Mattermost webhook.When not empty, each key must be a name of a builder and it's value a dictionary. This inner dictionary supports a "channels"-key, which must be a string or list of strings of channels to send the message to. No messages will be sent for unlisted builders.
+    :param list ignore_builders: No messages will be sent for the builders listed.
     :param string icon_url: A url to a picture to display as the bot's avatar.
     :param string bot_name: The name the bot give itself.
 

@@ -39,6 +39,7 @@ class MattermostStatusPush(http.HttpStatusPushBase):
 
     @defer.inlineCallbacks
     def reconfigService(self, endpoint, builder_configs={},
+                        ignore_builders=[],
                         icon_url='//buildbot.net/img/nut.png',
                         bot_name='BuildBot', **kwargs):
         yield http.HttpStatusPushBase.reconfigService(self, **kwargs)
@@ -47,16 +48,20 @@ class MattermostStatusPush(http.HttpStatusPushBase):
             self.master, endpoint)
 
         self.builder_configs = builder_configs
+        self.ignore_builders = ignore_builders
         self.icon_url = icon_url
         self.bot_name = bot_name
 
     def checkConfig(self, endpoint, builder_configs={},
+                    ignore_builders=[],
                     icon_url='//buildbot.net/img/nut.png',
                     bot_name='BuildBot', **kwargs):
         if not isinstance(endpoint, string_types):
             config.error('endpoint must be a string')
         if not isinstance(builder_configs, dict):
             config.error('builder_configs must be a dictionary')
+        if not isinstance(ignore_builders, list):
+            config.error('ignore_builders must be a list')
         if not isinstance(icon_url, string_types):
             config.error('icon_url must be a string')
         if not isinstance(bot_name, string_types):
@@ -100,6 +105,9 @@ class MattermostStatusPush(http.HttpStatusPushBase):
         return """{msg_header}""".format(msg_header=msg_header)
 
     def getBuilderConfig(self, key):
+        if key in self.ignore_builders:
+            return None
+
         if len(self.builder_configs) == 0:
             return {}
 
