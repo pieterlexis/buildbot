@@ -35,7 +35,7 @@ log = Logger()
 
 class MattermostStatusPush(http.HttpStatusPushBase):
     name = "MattermostStatusPush"
-    neededDetails = dict(wantProperties=True)
+    neededDetails = dict(wantProperties=True, wantSteps=True)
 
     @defer.inlineCallbacks
     def reconfigService(self, endpoint, builder_configs={},
@@ -79,30 +79,57 @@ class MattermostStatusPush(http.HttpStatusPushBase):
 
         return self._http.post('', json=payload)
 
+    @defer.inlineCallbacks
     def getMessage(self, builder_config, build):
-        msg_header = 'Builder {}'.format(build['builder']['name'])
         msg_buildurl = '[#{buildnum}]({buildurl})'.format(
             buildnum=build['number'],
             buildurl=build['url']
         )
+        msg_state = 'Finished' if build['complete'] else 'Started'
+
+        msg_builderinfo = 'build {} for {}'.format(
+            msg_buildurl,
+            build['builder']['name'])
+        msg_body = ''
 
         if build['properties'].get('project', [''])[0]:
-            msg_header += ' for project {}'.format(build['properties']['project'])
+            msg_builderinfo += ' for project {}'.format(build['properties']['project'])
 
-        if build['complete']:
-            msg_header += ' finished {} {}!'.format(
-                msg_buildurl,
-                {
-                    SUCCESS: 'successfully',
-                    EXCEPTION: 'with an error',
-                    FAILURE: 'unsuccessfully',
-                    WARNINGS: 'successfully with warnings'
-                }.get(build['results'])
+        if not build['complete']:
+            return """**Started {msg_builderinfo}!**""".format(
+                msg_builderinfo=msg_builderinfo
             )
-        else:
-            msg_header += ' started {}!'.format(msg_buildurl)
 
-        return """{msg_header}""".format(msg_header=msg_header)
+        msg_result = {SUCCESS: 'successfully',
+                      EXCEPTION: 'with an error',
+                      FAILURE: 'unsuccessfully',
+                      WARNINGS: 'successfully with warnings'}.get(build['results'])
+
+        if build['results'] == FAILURE:
+            failed_steps = [step for step in build['steps'].data if step['results'] == FAILURE]
+            responsible_users = yield utils.getResponsibleUsersForBuild(self.master, build['buildid'])
+            responsible_users = [user for user in responsible_users if user != '']
+
+            msg_body += """Failed step{}: {}.
+User{} responsible for this build: {}""".format(
+                '' if len(failed_steps) == 1 else 's',
+                ', '.join([step['name'] for step in failed_steps]),
+                '' if len(responsible_users) == 1 else 's',
+                ', '.join(responsible_users) if len(responsible_users) != 0 else '(none found)'
+            )
+
+        if build['results'] == EXCEPTION:
+            # TODO
+            pass
+
+        if build['results'] == WARNINGS:
+            # TODO
+            pass
+
+        return """**Finished {msg_builderinfo} {msg_result}!**
+{msg_body}""".format(msg_builderinfo=msg_builderinfo,
+                     msg_result=msg_result,
+                     msg_body=msg_body)
 
     def getBuilderConfig(self, key):
         if key in self.ignore_builders:
