@@ -57,19 +57,24 @@ class MattermostStatusPush(http.HttpStatusPushBase):
                     icon_url='//buildbot.net/img/nut.png',
                     bot_name='BuildBot', **kwargs):
         if not isinstance(endpoint, string_types):
-            config.error('endpoint must be a string')
+            config.error('{name}: endpoint must be a string'.format(
+                name=self.name))
         if not isinstance(builder_configs, dict):
-            config.error('builder_configs must be a dictionary')
+            config.error('{name}: builder_configs must be a dictionary'.format(
+                name=self.name))
+        if not isinstance(ignore_builders, list):
+            config.error('{name}: ignore_builders must be a list'.format(
+                name=self.name))
         for channel, chconfig in builder_configs.items():
             if not isinstance(chconfig, dict):
-                config.error('configuration for channel {channel} is not a dict'.format(
-                    channel=channel))
-        if not isinstance(ignore_builders, list):
-            config.error('ignore_builders must be a list')
+                config.error('{name}: configuration for channel {channel} is not a dict'.format(
+                    name=self.name, channel=channel))
         if not isinstance(icon_url, string_types):
-            config.error('icon_url must be a string')
+            config.error('{name}: icon_url must be a string'.format(
+                name=self.name))
         if not isinstance(bot_name, string_types):
-            config.error('bot_name must be a string')
+            config.error('{name}: bot_name must be a string'.format(
+                name=self.name))
 
     def sendMessageToChannel(self, channel, message):
         payload = {
@@ -135,13 +140,26 @@ User{} responsible for this build: {}""".format(
                      msg_body=msg_body)
 
     def getBuilderConfig(self, key):
-        if key in self.ignore_builders:
+        """
+        Return the configuration for builder ``key``
+
+        :param str key: The builder to retrieve the config for
+        :return: A dict with the configuration or None is this builder is ignored
+        """
+        if key in self.ignored_builders:
             return None
 
+        # No builder-specific configs, send all messages to the default channel
         if len(self.builder_configs) == 0:
             return {}
 
-        return self.builder_configs.get(key, None)
+        ret = self.builder_configs.get(key, None)
+
+        if not ret:
+            # No channel specific config, is there a default config?
+            ret = self.builder_configs.get('DEFAULT', None)
+
+        return ret
 
     @defer.inlineCallbacks
     def send(self, build):
