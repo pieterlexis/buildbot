@@ -60,6 +60,10 @@ class MattermostStatusPush(http.HttpStatusPushBase):
             config.error('endpoint must be a string')
         if not isinstance(builder_configs, dict):
             config.error('builder_configs must be a dictionary')
+        for channel, chconfig in builder_configs.items():
+            if not isinstance(chconfig, dict):
+                config.error('configuration for channel {channel} is not a dict'.format(
+                    channel=channel))
         if not isinstance(ignore_builders, list):
             config.error('ignore_builders must be a list')
         if not isinstance(icon_url, string_types):
@@ -85,7 +89,6 @@ class MattermostStatusPush(http.HttpStatusPushBase):
             buildnum=build['number'],
             buildurl=build['url']
         )
-        msg_state = 'Finished' if build['complete'] else 'Started'
 
         msg_builderinfo = 'build {} for {}'.format(
             msg_buildurl,
